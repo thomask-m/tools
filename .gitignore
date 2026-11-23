@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.DS_Store
+# Backups that emacs-config makes if they ever end up in here
+*.bak-*
