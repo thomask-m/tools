@@ -5,6 +5,7 @@ subclass, then import it below.
 """
 from . import xcode_clt  # noqa: F401
 from . import macos_defaults  # noqa: F401
+from . import caps_lock  # noqa: F401
 from . import homebrew  # noqa: F401
 from . import brew_packages  # noqa: F401
 from . import rust  # noqa: F401

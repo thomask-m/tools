@@ -59,6 +59,7 @@ Tasks skip themselves when already done, so rerunning is safe.
 |------------------|------------------------------------------------------------------|
 | `xcode-clt`      | Checks for the Xcode Command Line Tools (`bootstrap.sh` installs them) |
 | `macos-defaults` | Keyboard repeat, no autocorrect or smart quotes, Finder shows hidden files and extensions, no `.DS_Store` on network or USB drives |
+| `caps-lock-control` | Caps Lock acts as Control on every keyboard: `hidutil` remaps it now, and a LaunchAgent (`~/Library/LaunchAgents/com.newmac.caps-lock-control.plist`) does it again at each login |
 | `homebrew`       | Checks for Homebrew (`bootstrap.sh` installs it), adds `brew shellenv` to `~/.zprofile` |
 | `brew-packages`  | Homebrew tools: `clang-format` (Emacs `cf`), `cmake`, `libtool`, `libvterm` (Emacs vterm). Edit `FORMULAE` in `brew_packages.py` to add more |
 | `rust`           | Rust via the official rustup installer (stable, in `~/.cargo`) |
