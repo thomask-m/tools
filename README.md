@@ -7,14 +7,34 @@ Uses only the Python standard library and needs Python 3.14.
 ## Quick start on a new Mac
 
 ```bash
-./bootstrap.sh
+curl -fsSL https://raw.githubusercontent.com/thomask-m/tools/main/install.sh | bash
 ```
 
-A fresh Mac has no Python 3.14, only the Python 3.9 that comes with the Xcode
-Command Line Tools. `bootstrap.sh` is a small launcher that installs whatever is
-missing (the Command Line Tools, Homebrew, then `python@3.14`) and runs
-`bootstrap.py` with Python 3.14, passing your arguments along. It is safe to
-rerun. With `--dry-run` it only prints what it would install.
+That's the whole setup. It needs nothing but `curl`, which every Mac has:
+
+1. `install.sh` downloads this repo to `~/proj/tools` (set `TOOLS_DIR` to
+   change that). If that folder already exists, it uses it as-is.
+2. It runs `bootstrap.sh`, which installs the Xcode Command Line Tools
+   (through `softwareupdate`, with no dialog), Homebrew, then `python@3.14`,
+   each only if missing. It asks for your password for these installs.
+3. `bootstrap.sh` then runs `bootstrap.py` with Python 3.14, which does the
+   rest (see Tasks below).
+
+To preview without changing anything:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thomask-m/tools/main/install.sh | bash -s -- --dry-run
+```
+
+Everything is safe to rerun. Later you can run `~/proj/tools/bootstrap.sh`
+directly.
+
+The downloaded folder isn't a git repo. To push changes (like an updated Emacs
+config) from that machine, turn it into one once git is installed:
+
+```bash
+cd ~/proj/tools && git init -b main && git remote add origin https://github.com/thomask-m/tools.git && git fetch origin && git reset origin/main && git branch -u origin/main
+```
 
 ## Usage
 
