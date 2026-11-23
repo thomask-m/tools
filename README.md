@@ -89,6 +89,43 @@ cp ~/.emacs dotfiles/emacs && cp ~/.emacs.custom.el dotfiles/emacs.custom.el
 `~/.emacs.custom.el`). Install a package with `M-x package-install` and Emacs
 adds it to that list for you, so remember to copy the file back afterwards.
 
+## Testing on a fresh VM
+
+`vmtest/run.sh` runs the whole install on a brand-new macOS virtual machine,
+checks that everything works, then deletes the VM. Nothing on your Mac changes
+apart from Tart's files, which are removed at the end.
+
+```bash
+brew install openai/tools/tart    # one time, ~23 MB
+vmtest/run.sh                     # test this working tree, uncommitted changes included
+vmtest/run.sh --github            # test the real curl one-liner (what's pushed)
+```
+
+Each run:
+
+1. Clones a fresh VM from Cirrus Labs' "vanilla" macOS image: clean macOS with
+   no Command Line Tools and no Homebrew, like a new Mac.
+2. Copies the project in and runs `install.sh -y` (or, with `--github`, the curl
+   one-liner).
+3. Runs `vmtest/verify.sh` inside the VM. It checks that every task reports
+   done, that a second run changes nothing, and that each thing actually works:
+   it runs the tools, formats with sillyfmt, checks the macOS settings, and
+   loads your Emacs config in batch mode.
+4. Deletes the VM, plus the downloaded macOS image (~24 GB).
+
+It takes roughly 30–60 minutes, mostly downloads, and needs about 60 GB of free
+disk while it runs. The output is saved in `vmtest/logs/`.
+
+Options:
+
+- `--keep-image` keeps the macOS image so the next run skips the 24 GB download.
+- `--keep-vm` leaves the VM running so you can SSH in and look around
+  (login `admin`, password `admin`).
+- `--clean` deletes leftover test VMs and the cached image. Use it after
+  `--keep-vm` or `--keep-image`, or if a run was interrupted.
+
+To remove Tart completely: `vmtest/run.sh --clean && brew uninstall tart && rm -rf ~/.tart`
+
 ## Adding a task
 
 1. Create `newmac/tasks/<thing>.py`:

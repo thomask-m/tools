@@ -3,3 +3,4 @@ __pycache__/
 .DS_Store
 # Backups that emacs-config makes if they ever end up in here
 *.bak-*
+vmtest/logs/
