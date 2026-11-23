@@ -60,9 +60,13 @@ Tasks skip themselves when already done, so rerunning is safe.
 | `xcode-clt`      | Checks for the Xcode Command Line Tools (`bootstrap.sh` installs them) |
 | `macos-defaults` | Keyboard repeat, no autocorrect or smart quotes, Finder shows hidden files and extensions, no `.DS_Store` on network or USB drives |
 | `homebrew`       | Checks for Homebrew (`bootstrap.sh` installs it), adds `brew shellenv` to `~/.zprofile` |
+| `brew-packages`  | Homebrew tools: `clang-format` (Emacs `cf`), `cmake`, `libtool`, `libvterm` (Emacs vterm). Edit `FORMULAE` in `brew_packages.py` to add more |
+| `rust`           | Rust via the official rustup installer (stable, in `~/.cargo`) |
+| `fonts`          | Downloads FixederSys 2x (the Emacs font) into `~/Library/Fonts`. Edit `FONTS` in `fonts.py` to add more |
 | `emacs`          | `brew install --cask emacs-app` (the GUI build from emacsformacosx.com) |
 | `emacs-config`   | Copies `dotfiles/emacs` to `~/.emacs` and `dotfiles/emacs.custom.el` to `~/.emacs.custom.el` |
 | `emacs-packages` | Installs the MELPA packages listed in `package-selected-packages` |
+| `sillyfmt`       | Clones and builds sillyfmt into `~/proj/sillyfmt` (the Emacs `sf` command) |
 
 ## Emacs config
 

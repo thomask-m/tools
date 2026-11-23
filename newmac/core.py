@@ -11,7 +11,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import urllib.request
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -94,16 +93,15 @@ class Context:
         return res.stdout.strip()
 
     def download(self, url: str) -> Path:
-        """Download `url` into a fresh temp dir and return the file's path."""
+        """Download `url` into a fresh temp dir and return the file's path.
+
+        Uses macOS's /usr/bin/curl rather than urllib: it ships with every Mac
+        and connects to servers whose TLS setup Python's OpenSSL rejects.
+        """
         name = url.rstrip("/").rsplit("/", 1)[-1] or "download"
-        if self.dry_run:
-            _detail(f"[dry-run] download {url}")
-            return Path(tempfile.gettempdir()) / name
-        _detail(f"download {url}")
-        dest = Path(tempfile.mkdtemp(prefix="newmac-")) / name
-        req = urllib.request.Request(url, headers={"User-Agent": "newmac-bootstrap"})
-        with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as fh:
-            shutil.copyfileobj(resp, fh)
+        folder = Path(tempfile.gettempdir() if self.dry_run else tempfile.mkdtemp(prefix="newmac-"))
+        dest = folder / name
+        self.run(["/usr/bin/curl", "-fsSL", "--retry", "3", "-o", str(dest), url])
         return dest
 
     def install_file(self, src: Path, dest: Path) -> None:
