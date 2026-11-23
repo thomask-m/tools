@@ -89,6 +89,43 @@ cp ~/.emacs dotfiles/emacs && cp ~/.emacs.custom.el dotfiles/emacs.custom.el
 `~/.emacs.custom.el`). Install a package with `M-x package-install` and Emacs
 adds it to that list for you, so remember to copy the file back afterwards.
 
+## Starting over: `cleanup.sh`
+
+To check that the install really works, undo it and run it again.
+`cleanup.sh` (same as `python3.14 bootstrap.py --uninstall`) undoes every
+task, in reverse order:
+
+```bash
+./cleanup.sh                  # show what would be removed (changes nothing)
+./cleanup.sh --yes            # remove it
+./cleanup.sh --yes emacs-config fonts   # only some tasks
+./cleanup.sh --yes --everything         # also Homebrew and the Command Line Tools
+./bootstrap.sh                # then install everything again
+```
+
+- **Nothing is deleted outright if it can be moved.** Files go to
+  `~/newmac-backup-<date>-<time>/`, and its `restore.sh` puts them back,
+  along with any macOS settings that were reset and any formulas or apps that
+  were uninstalled. Delete that folder once you're happy with the reinstall.
+- **It won't start if it would lose work.** It stops before removing anything if
+  `~/proj/sillyfmt` has uncommitted, unpushed or stashed changes, or if
+  `~/.emacs` or `~/.emacs.custom.el` differs from `dotfiles/` (copy it back
+  first). `--force` skips these checks.
+- **Homebrew and the Command Line Tools stay unless you pass `--everything`.**
+  Removing Homebrew also removes everything else you installed with it, so
+  the dry run lists those packages first: add the ones you want to
+  `brew_packages.py` before you remove them. Homebrew is removed with its
+  official uninstaller, so it isn't in the backup folder. The Command Line
+  Tools are moved there.
+- Without `--everything`, Python 3.14 stays too, since the cleanup runs on it.
+- macOS settings are deleted rather than set to other values, which puts
+  them back to Apple's defaults, as on a new Mac.
+- If Xcode.app is installed, `xcode-select` falls back to it after the
+  Command Line Tools are removed, so `bootstrap.sh` won't reinstall them.
+  Move Xcode.app aside too if you want to test that step.
+
+Back up first (Time Machine, or at least `tmutil localsnapshot`).
+
 ## Adding a task
 
 1. Create `newmac/tasks/<thing>.py`:
@@ -107,9 +144,17 @@ adds it to that list for you, so remember to copy the file back afterwards.
 
        def apply(self) -> None:         # do the work through self.ctx
            self.ctx.run(["brew", "install", "thing"])
+
+       def uninstall(self) -> None:     # undo apply, for cleanup.sh
+           self.ctx.run(["brew", "uninstall", "thing"])
+           self.ctx.note_restore("brew install thing")
    ```
 
 2. Import it in `newmac/tasks/__init__.py`. The import order there is the run order.
 
 Use the `self.ctx` helpers (`run`, `output`, `download`,
 `ensure_line_in_file`) instead of calling `subprocess` directly, so `--dry-run` works.
+In `uninstall`, move files with `self.ctx.stash(path)` and undo edits with
+`remove_line_from_file`, so `restore.sh` can put them back. Use
+`note_restore` for anything else. If removing could lose work, return the
+reason from `uninstall_blockers()`.

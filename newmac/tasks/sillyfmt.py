@@ -23,6 +23,29 @@ class Sillyfmt(Task):
     def is_done(self) -> bool:
         return (self.src / "target" / "release" / "sillyfmt").exists()
 
+    def uninstall_blockers(self) -> list[str]:
+        if not self.src.exists():
+            return []
+        if not (self.src / ".git").exists():
+            return [f"{self.src} isn't a git checkout, so it may hold work that exists nowhere else"]
+        git = ["git", "-C", str(self.src)]
+        checks = {
+            "has uncommitted changes": [*git, "status", "--porcelain"],
+            "has commits that aren't pushed": [*git, "log", "--branches", "--not", "--remotes", "--oneline"],
+            "has stashed changes": [*git, "stash", "list"],
+        }
+        problems = []
+        for problem, cmd in checks.items():
+            out = self.ctx.output(cmd)
+            if out is None:
+                problems.append(f"couldn't check whether {self.src} {problem.removeprefix('has ')}")
+            elif out:
+                problems.append(f"{self.src} {problem}")
+        return problems
+
+    def uninstall(self) -> None:
+        self.ctx.stash(self.src)
+
     def apply(self) -> None:
         if not (self.src / "Cargo.toml").exists():
             self.ctx.run(["git", "clone", REPO, str(self.src)])

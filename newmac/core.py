@@ -54,10 +54,12 @@ def _detail(msg: str) -> None:
 class Context:
     """Run-wide settings shared by all tasks."""
 
-    def __init__(self, dry_run: bool = False, assume_yes: bool = False) -> None:
+    def __init__(self, dry_run: bool = False, assume_yes: bool = False, everything: bool = False) -> None:
         self.dry_run = dry_run
         self.assume_yes = assume_yes
+        self.everything = everything  # --uninstall also removes Homebrew and the CLT
         self.home = Path.home()
+        self._backup_dir: Path | None = None
 
     def run(
         self,
@@ -132,6 +134,75 @@ class Context:
                 fh.write("\n")
             fh.write(line + "\n")
 
+    # --- Uninstalling: move things aside instead of deleting them ---------- #
+
+    @property
+    def backup_dir(self) -> Path:
+        """~/newmac-backup-<time>/: where --uninstall moves things, plus restore.sh."""
+        if self._backup_dir is None:
+            self._backup_dir = self.home / f"newmac-backup-{time.strftime('%Y%m%d-%H%M%S')}"
+            if not self.dry_run:
+                self._backup_dir.mkdir()
+                restore = self._backup_dir / "restore.sh"
+                restore.write_text(
+                    "#!/bin/bash\n"
+                    "# Puts back what `bootstrap.py --uninstall` moved here and the settings it reset.\n"
+                    "# Homebrew and the Command Line Tools aren't reinstalled by this: if they were\n"
+                    "# removed, run bootstrap.sh first.\n"
+                    "set -x\n"
+                )
+                restore.chmod(0o755)
+        return self._backup_dir
+
+    @property
+    def backed_up(self) -> bool:
+        """Whether anything was moved or changed (and so the backup folder exists)."""
+        return self._backup_dir is not None and not self.dry_run
+
+    def note_restore(self, command: str) -> None:
+        """Append a shell command to the backup folder's restore.sh."""
+        if not self.dry_run:
+            with open(self.backup_dir / "restore.sh", "a") as fh:
+                fh.write(command + "\n")
+
+    def _backup_path(self, path: Path) -> Path:
+        """Where `path` goes in the backup folder: same place relative to ~ (or to / under root/)."""
+        rel = path.relative_to(self.home) if path.is_relative_to(self.home) else Path("root", *path.parts[1:])
+        return self.backup_dir / rel
+
+    def stash(self, path: Path, sudo: bool = False) -> None:
+        """Move `path` into the backup folder (at the same relative location)."""
+        if not path.exists() and not path.is_symlink():
+            return
+        dest = self._backup_path(path)
+        if sudo:
+            if not self.dry_run:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+            self.run(["sudo", "mv", str(path), str(dest)])
+        else:
+            _detail(f"{'[dry-run] ' if self.dry_run else ''}move {path} -> {dest}")
+            if self.dry_run:
+                return
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(path, dest)
+        self.note_restore(shlex.join([*(["sudo"] if sudo else []), "mv", str(dest), str(path)]))
+
+    def remove_line_from_file(self, path: Path, line: str) -> None:
+        """Remove every copy of `line` from `path` (the opposite of ensure_line_in_file)."""
+        if not path.exists() or line not in (lines := path.read_text().splitlines()):
+            return
+        _detail(f"{'[dry-run] ' if self.dry_run else ''}remove from {path}: {line}")
+        if self.dry_run:
+            return
+        # Keep the original file (once, before the first edit) so restore.sh
+        # puts it back exactly, line order included.
+        original = self._backup_path(path)
+        if not original.exists():
+            original.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, original)
+            self.note_restore(shlex.join(["cp", "-p", str(original), str(path)]))
+        path.write_text("".join(f"{l}\n" for l in lines if l != line))
+
 
 # --------------------------------------------------------------------------- #
 # Tasks and registry
@@ -142,8 +213,9 @@ class Task:
     """One installable/configurable thing.
 
     Subclasses set `name`/`description`, optionally `requires`, and implement
-    `is_done` (cheap, read-only check) and `apply` (do the work). Tasks should be
-    idempotent: running `apply` twice must be safe.
+    `is_done` (cheap, read-only check), `apply` (do the work) and `uninstall`
+    (undo it, for testing the install from scratch). Both must be idempotent:
+    running either twice must be safe.
     """
 
     name: str = ""
@@ -158,6 +230,14 @@ class Task:
 
     def apply(self) -> None:
         raise NotImplementedError
+
+    def uninstall(self) -> None:
+        """Undo `apply`. Move files with ctx.stash so they can be put back."""
+        raise NotImplementedError
+
+    def uninstall_blockers(self) -> list[str]:
+        """Reasons uninstalling now would lose work. Checked before anything is removed."""
+        return []
 
 
 _REGISTRY: dict[str, type[Task]] = {}

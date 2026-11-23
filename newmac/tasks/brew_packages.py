@@ -1,5 +1,5 @@
 """Command-line tools from Homebrew. Add a formula to FORMULAE to install it."""
-from ..core import Task, register
+from ..core import Task, register, warn
 from .homebrew import BREW, PREFIX
 
 FORMULAE = {  # formula -> why it's here
@@ -26,3 +26,17 @@ class BrewPackages(Task):
     def apply(self) -> None:
         if missing := self._missing():
             self.ctx.run([str(BREW), "install", *missing])
+
+    def uninstall(self) -> None:
+        if not BREW.exists():
+            return
+        remove = []
+        for f in (f for f in FORMULAE if (PREFIX / "opt" / f).exists()):
+            users = self.ctx.output([str(BREW), "uses", "--installed", f]) or ""
+            if others := [u for u in users.split() if u not in FORMULAE]:
+                warn(f"kept {f}: other Homebrew packages need it ({' '.join(others)})")
+            else:
+                remove.append(f)
+        if remove:
+            self.ctx.run([str(BREW), "uninstall", *remove])
+            self.ctx.note_restore(" ".join([str(BREW), "install", *remove]))

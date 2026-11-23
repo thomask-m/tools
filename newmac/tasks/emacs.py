@@ -23,3 +23,10 @@ class Emacs(Task):
 
     def apply(self) -> None:
         self.ctx.run([str(BREW), "install", "--cask", CASK])
+
+    def uninstall(self) -> None:
+        if (PREFIX / "Caskroom" / CASK).exists() and BREW.exists():
+            self.ctx.run([str(BREW), "uninstall", "--cask", CASK])
+            self.ctx.note_restore(f"{BREW} install --cask {CASK}")
+        else:  # installed some other way
+            self.ctx.stash(APP)
