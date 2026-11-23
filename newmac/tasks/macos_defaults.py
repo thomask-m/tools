@@ -4,6 +4,7 @@ Edit SETTINGS to taste. Each entry: (domain, key, type, value, note).
 Types are the `defaults` type flags: bool, int, float, string.
 """
 import plistlib
+import shlex
 
 from ..core import Task, register
 
@@ -59,6 +60,26 @@ class MacOSDefaults(Task):
         for domain, key, type_, value, _note in self._pending():
             val = str(value).lower() if type_ == "bool" else str(value)
             self.ctx.run(["defaults", "write", domain, key, f"-{type_}", val])
+        self._restart_apps()
+        # Keyboard settings only apply after logging out and back in.
+
+    def uninstall(self) -> None:
+        # A new Mac doesn't have these keys at all, so delete them (back to
+        # Apple's defaults), saving the current values to restore.sh first.
+        changed = False
+        for domain in dict.fromkeys(s[0] for s in SETTINGS):
+            current = self._read_domain(domain)
+            for key in (s[1] for s in SETTINGS if s[0] == domain and s[1] in current):
+                value = current[key]
+                type_ = {bool: "bool", int: "int", float: "float", str: "string"}.get(type(value))
+                if type_:
+                    val = str(value).lower() if type_ == "bool" else str(value)
+                    self.ctx.note_restore(shlex.join(["defaults", "write", domain, key, f"-{type_}", val]))
+                self.ctx.run(["defaults", "delete", domain, key])
+                changed = True
+        if changed:
+            self._restart_apps()
+
+    def _restart_apps(self) -> None:
         for app in RESTART:
             self.ctx.run(["killall", app], check=False)
-        # Keyboard settings only apply after logging out and back in.

@@ -7,6 +7,7 @@ Examples:
     python3.14 bootstrap.py --dry-run    # show what would happen
     python3.14 bootstrap.py              # run everything
     python3.14 bootstrap.py emacs        # run one task (plus its dependencies)
+    ./cleanup.sh                         # show what --uninstall would remove (see cleanup.sh)
 """
 # Everything above the newmac imports must stay parseable by old Pythons (the
 # 3.9 from the Command Line Tools), so the wrong interpreter gets a clear
@@ -35,7 +36,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("-l", "--list", action="store_true", help="list tasks and their status")
     p.add_argument("-n", "--dry-run", action="store_true", help="print actions without doing them")
     p.add_argument("-y", "--yes", action="store_true", help="don't prompt for confirmation")
-    p.add_argument("-f", "--force", action="store_true", help="run tasks even if they look done")
+    p.add_argument("-f", "--force", action="store_true",
+                   help="run tasks even if they look done (with --uninstall: ignore safety checks)")
+    p.add_argument("-u", "--uninstall", action="store_true",
+                   help="undo the tasks so the install can be tested from scratch; only shows "
+                        "what it would do unless --yes is given")
+    p.add_argument("--everything", action="store_true",
+                   help="with --uninstall: also remove Homebrew and the Command Line Tools")
     return p.parse_args(argv)
 
 
@@ -46,7 +53,12 @@ def main(argv: list[str] | None = None) -> int:
         core.error("These scripts are for macOS only.")
         return 1
 
-    ctx = core.Context(dry_run=args.dry_run, assume_yes=args.yes)
+    if args.everything and not args.uninstall:
+        core.error("--everything only works with --uninstall")
+        return 2
+    # Uninstalling is a dry run unless --yes says otherwise.
+    dry_run = args.dry_run or (args.uninstall and not args.yes)
+    ctx = core.Context(dry_run=dry_run, assume_yes=args.yes, everything=args.everything)
     registry = core.all_tasks()
 
     if args.list:
@@ -56,6 +68,9 @@ def main(argv: list[str] | None = None) -> int:
             deps = f"  (needs: {', '.join(cls.requires)})" if cls.requires else ""
             print(f"  {name:<{width}}  [{status}]  {cls.description}{deps}")
         return 0
+
+    if args.uninstall:
+        return uninstall(ctx, registry, args.tasks, ignore_blockers=args.force)
 
     try:
         order = core.resolve_order(args.tasks or list(registry))
@@ -79,6 +94,43 @@ def main(argv: list[str] | None = None) -> int:
         core.ok("done")
 
     core.info("All done." + (" (dry run, nothing changed)" if ctx.dry_run else ""))
+    return 0
+
+
+def uninstall(ctx: core.Context, registry: dict, names: list[str], ignore_blockers: bool) -> int:
+    """Undo tasks in reverse install order. Only the named ones, if any are named."""
+    if unknown := [n for n in names if n not in registry]:
+        core.error(f"unknown task: {', '.join(unknown)}")
+        core.error(f"available: {', '.join(registry)}")
+        return 2
+    order = [n for n in reversed(core.resolve_order(list(registry))) if not names or n in names]
+    tasks = [registry[n](ctx) for n in order]
+
+    blockers = [(t.name, reason) for t in tasks for reason in t.uninstall_blockers()]
+    for name, reason in blockers:
+        core.error(f"{name}: {reason}")
+    if blockers and not ignore_blockers:
+        core.error("Nothing was removed. Fix the above first, or pass --force to remove anyway.")
+        return 1
+
+    for task in tasks:
+        core.info(f"{task.name}: remove {task.description}")
+        try:
+            task.uninstall()
+        except (subprocess.CalledProcessError, OSError, RuntimeError) as exc:
+            core.error(f"{task.name} failed: {exc}")
+            if ctx.backed_up:
+                core.error(f"What was removed so far is in {ctx.backup_dir} (restore.sh puts it back).")
+            return 1
+
+    if ctx.dry_run:
+        core.info("Nothing changed (dry run). Rerun with --yes to remove the above.")
+    elif not ctx.backed_up:
+        core.info("Nothing left to remove.")
+    else:
+        core.info(f"Removed. Everything moved aside is in {ctx.backup_dir}")
+        core.info(f"  put it back: {ctx.backup_dir / 'restore.sh'}")
+        core.info("  or reinstall from scratch: ./bootstrap.sh")
     return 0
 
 

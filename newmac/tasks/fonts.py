@@ -23,3 +23,7 @@ class Fonts(Task):
         fonts_dir = self.ctx.home / "Library" / "Fonts"
         for name, url in self._missing().items():
             self.ctx.install_file(self.ctx.download(url), fonts_dir / name)
+
+    def uninstall(self) -> None:
+        for name in FONTS:
+            self.ctx.stash(self.ctx.home / "Library" / "Fonts" / name)
